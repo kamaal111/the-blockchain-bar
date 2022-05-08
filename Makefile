@@ -6,5 +6,8 @@ build-node:
 run-node:
 	docker run -d --name tbb-node tbb-node
 
+stop-node:
+	docker stop tbb-node
+
 log-node:
 	docker logs tbb-node -n 10 --timestamps
