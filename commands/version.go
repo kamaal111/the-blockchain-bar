@@ -11,7 +11,7 @@ const Minor = "1"
 const Fix = "0"
 const Verbal = "Transaction Add && Balances List"
 
-var VersionCommand = &cobra.Command{
+var Version = &cobra.Command{
 	Use:   "version",
 	Short: "Describes version.",
 	Run: func(cmd *cobra.Command, args []string) {

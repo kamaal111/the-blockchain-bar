@@ -16,7 +16,8 @@ func main() {
 		},
 	}
 
-	tbbCommand.AddCommand(commands.VersionCommand)
+	tbbCommand.AddCommand(commands.Version)
+	tbbCommand.AddCommand(commands.Balances())
 
 	err := tbbCommand.Execute()
 	if err != nil {
