@@ -43,11 +43,15 @@ func (state *State) Persist() error {
 			return err
 		}
 
-		// Remove the TX written to a file from the mempool
+		// Remove the transaction written to a file from the mempool
 		state.transactionMemoryPool = state.transactionMemoryPool[1:]
 	}
 
 	return nil
+}
+
+func (state *State) Close() {
+	state.databaseFile.Close()
 }
 
 func NewStateFromDisk() (*State, error) {
@@ -72,7 +76,6 @@ func NewStateFromDisk() (*State, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer transactionsDatabaseFile.Close()
 
 	state := &State{balances, make([]Transaction, 0), transactionsDatabaseFile}
 

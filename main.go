@@ -18,6 +18,7 @@ func main() {
 
 	tbbCommand.AddCommand(commands.Version)
 	tbbCommand.AddCommand(commands.Balances())
+	tbbCommand.AddCommand(commands.Transactions())
 
 	err := tbbCommand.Execute()
 	if err != nil {
