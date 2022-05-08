@@ -60,7 +60,9 @@ func NewStateFromDisk() (*State, error) {
 		return nil, err
 	}
 
-	genesisFilepath := filepath.Join(currentWorkingDirectory, "database", "genesis.json")
+	databaseDirectory := filepath.Join(currentWorkingDirectory, "database")
+
+	genesisFilepath := filepath.Join(databaseDirectory, "genesis.json")
 	genesisContent, err := loadGenesis(genesisFilepath)
 	if err != nil {
 		return nil, err
@@ -71,7 +73,7 @@ func NewStateFromDisk() (*State, error) {
 		balances[account] = balance
 	}
 
-	transactionsDatabaseFilepath := filepath.Join(currentWorkingDirectory, "database", "transactions.db")
+	transactionsDatabaseFilepath := filepath.Join(databaseDirectory, "transactions.db")
 	transactionsDatabaseFile, err := os.OpenFile(transactionsDatabaseFilepath, os.O_APPEND|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
