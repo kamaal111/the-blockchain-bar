@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kamaal111/the-blockchain-bar/commands"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,7 @@ func main() {
 		},
 	}
 
-	tbbCommand.AddCommand(versionCommand)
+	tbbCommand.AddCommand(commands.VersionCommand)
 
 	err := tbbCommand.Execute()
 	if err != nil {

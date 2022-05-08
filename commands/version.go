@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ const Minor = "1"
 const Fix = "0"
 const Verbal = "Transaction Add && Balances List"
 
-var versionCommand = &cobra.Command{
+var VersionCommand = &cobra.Command{
 	Use:   "version",
 	Short: "Describes version.",
 	Run: func(cmd *cobra.Command, args []string) {
