@@ -2,17 +2,41 @@ package database
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 )
+
+type Snapshot [32]byte
 
 type State struct {
 	Balances              map[Account]uint
 	transactionMemoryPool []Transaction
 
 	databaseFile *os.File
+	snapshot     Snapshot
+}
+
+func (state *State) doSnapshot() (Snapshot, error) {
+	// Re-read the whole file from the first byte
+	_, err := state.databaseFile.Seek(0, 0)
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	transactionData, err := ioutil.ReadAll(state.databaseFile)
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	snapshot := sha256.Sum256(transactionData)
+	state.snapshot = snapshot
+
+	return snapshot, err
 }
 
 func (state *State) Add(transaction Transaction) error {
@@ -26,28 +50,36 @@ func (state *State) Add(transaction Transaction) error {
 	return nil
 }
 
-func (state *State) Persist() error {
+func (state *State) Persist() (Snapshot, error) {
 	// Make a copy of mempool because the s.txMempool will be modified
 	// in the loop below
 	memoryPool := make([]Transaction, len(state.transactionMemoryPool))
 	copy(memoryPool, state.transactionMemoryPool)
 
+	var snapshot Snapshot
 	for _, transaction := range memoryPool {
 		transactionJSON, err := json.Marshal(transaction)
 		if err != nil {
-			return err
+			return snapshot, err
 		}
 
+		log.Printf("Persisting new transaction in to disk:\n\t%s\n", transactionJSON)
 		_, err = state.databaseFile.Write(append(transactionJSON, '\n'))
 		if err != nil {
-			return err
+			return snapshot, err
 		}
 
+		snapshot, err = state.doSnapshot()
+		if err != nil {
+			return snapshot, err
+		}
+
+		log.Printf("New database snapshot: %x\n", snapshot)
 		// Remove the transaction written to a file from the mempool
 		state.transactionMemoryPool = state.transactionMemoryPool[1:]
 	}
 
-	return nil
+	return snapshot, nil
 }
 
 func (state *State) Close() {
@@ -79,7 +111,7 @@ func NewStateFromDisk() (*State, error) {
 		return nil, err
 	}
 
-	state := &State{balances, make([]Transaction, 0), transactionsDatabaseFile}
+	state := &State{balances, make([]Transaction, 0), transactionsDatabaseFile, Snapshot{}}
 
 	transactionsDatabaseFileScanner := bufio.NewScanner(transactionsDatabaseFile)
 	// Iterate over each the transaction database file's line

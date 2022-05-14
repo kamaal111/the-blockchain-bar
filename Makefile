@@ -1,5 +1,11 @@
 # Makefile
 
+seed-state:
+	sh scripts/seed_state.sh
+
+build:
+	sh scripts/build.sh
+
 build-node:
 	docker build --file docker/Dockerfile.node --tag tbb-node --force-rm .
 

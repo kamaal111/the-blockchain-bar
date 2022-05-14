@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/kamaal111/the-blockchain-bar/database"
@@ -64,13 +65,13 @@ func transactionsAddCommand() *cobra.Command {
 			}
 
 			// Flush the memory pool transactions to disk
-			err = state.Persist()
+			_, err = state.Persist()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
 
-			fmt.Println("Transaction successfully added to the ledger.")
+			log.Println("Transaction successfully added to the ledger.")
 		},
 	}
 
