@@ -42,10 +42,9 @@ func transactionsAddCommand() *cobra.Command {
 			value, _ := cmd.Flags().GetUint(FLAG_VALUE)
 			data, _ := cmd.Flags().GetString(FLAG_DATA)
 
-			fromAcc := database.NewAccount(from)
-			toAcc := database.NewAccount(to)
-
-			transaction := database.NewTransaction(fromAcc, toAcc, value, data)
+			sendingAccount := database.NewAccount(from)
+			receivingAccount := database.NewAccount(to)
+			transaction := database.NewTransaction(sendingAccount, receivingAccount, value, data)
 
 			state, err := database.NewStateFromDisk()
 			if err != nil {
@@ -58,7 +57,7 @@ func transactionsAddCommand() *cobra.Command {
 			defer state.Close()
 
 			// Add the TX to an in-memory array (pool)
-			err = state.Add(transaction)
+			err = state.AddTransaction(transaction)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)

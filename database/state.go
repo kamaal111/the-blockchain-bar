@@ -2,44 +2,23 @@ package database
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
-
-type Snapshot [32]byte
 
 type State struct {
 	Balances              map[Account]uint
 	transactionMemoryPool []Transaction
 
-	databaseFile *os.File
-	snapshot     Snapshot
+	blockFile       *os.File
+	latestBlockHash Hash
 }
 
-func (state *State) doSnapshot() (Snapshot, error) {
-	// Re-read the whole file from the first byte
-	_, err := state.databaseFile.Seek(0, 0)
-	if err != nil {
-		return Snapshot{}, err
-	}
-
-	transactionData, err := ioutil.ReadAll(state.databaseFile)
-	if err != nil {
-		return Snapshot{}, err
-	}
-
-	snapshot := sha256.Sum256(transactionData)
-	state.snapshot = snapshot
-
-	return snapshot, err
-}
-
-func (state *State) Add(transaction Transaction) error {
+func (state *State) AddTransaction(transaction Transaction) error {
 	err := state.apply(transaction)
 	if err != nil {
 		return err
@@ -50,40 +29,50 @@ func (state *State) Add(transaction Transaction) error {
 	return nil
 }
 
-func (state *State) Persist() (Snapshot, error) {
-	// Make a copy of mempool because the s.txMempool will be modified
-	// in the loop below
-	memoryPool := make([]Transaction, len(state.transactionMemoryPool))
-	copy(memoryPool, state.transactionMemoryPool)
-
-	var snapshot Snapshot
-	for _, transaction := range memoryPool {
-		transactionJSON, err := json.Marshal(transaction)
+func (state *State) AddBlock(block Block) error {
+	for _, transaction := range block.Transactions {
+		err := state.AddTransaction(transaction)
 		if err != nil {
-			return snapshot, err
+			return err
 		}
-
-		log.Printf("Persisting new transaction in to disk:\n\t%s\n", transactionJSON)
-		_, err = state.databaseFile.Write(append(transactionJSON, '\n'))
-		if err != nil {
-			return snapshot, err
-		}
-
-		snapshot, err = state.doSnapshot()
-		if err != nil {
-			return snapshot, err
-		}
-
-		log.Printf("New database snapshot: %x\n", snapshot)
-		// Remove the transaction written to a file from the mempool
-		state.transactionMemoryPool = state.transactionMemoryPool[1:]
 	}
 
-	return snapshot, nil
+	return nil
+}
+
+func (state *State) Persist() (Hash, error) {
+	now := uint64(time.Now().Unix())
+	block := NewBlock(
+		state.latestBlockHash,
+		now,
+		state.transactionMemoryPool,
+	)
+
+	blockHash, err := block.Hash()
+	if err != nil {
+		return Hash{}, err
+	}
+
+	blockFS := BlockFS{blockHash, block}
+	blockJSON, err := json.Marshal(blockFS)
+	if err != nil {
+		return Hash{}, nil
+	}
+
+	log.Printf("Persisting new Block in to disk:\n\t%s\n", blockJSON)
+	_, err = state.blockFile.Write(append(blockJSON, '\n'))
+	if err != nil {
+		return Hash{}, err
+	}
+
+	state.latestBlockHash = blockHash
+	state.transactionMemoryPool = []Transaction{}
+
+	return blockHash, nil
 }
 
 func (state *State) Close() {
-	state.databaseFile.Close()
+	state.blockFile.Close()
 }
 
 func NewStateFromDisk() (*State, error) {
@@ -105,35 +94,40 @@ func NewStateFromDisk() (*State, error) {
 		balances[account] = balance
 	}
 
-	transactionsDatabaseFilepath := filepath.Join(databaseDirectory, "transactions.db")
-	transactionsDatabaseFile, err := os.OpenFile(transactionsDatabaseFilepath, os.O_APPEND|os.O_RDWR, 0600)
+	blockFilepath := filepath.Join(databaseDirectory, "block.db")
+	blockFile, err := os.OpenFile(blockFilepath, os.O_APPEND|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
 
-	state := &State{balances, make([]Transaction, 0), transactionsDatabaseFile, Snapshot{}}
+	state := &State{balances, make([]Transaction, 0), blockFile, Hash{}}
 
-	transactionsDatabaseFileScanner := bufio.NewScanner(transactionsDatabaseFile)
-	// Iterate over each the transaction database file's line
-	for transactionsDatabaseFileScanner.Scan() {
-		err = transactionsDatabaseFileScanner.Err()
+	scanner := bufio.NewScanner(blockFile)
+	for scanner.Scan() {
+		err = scanner.Err()
 		if err != nil {
 			return nil, err
 		}
 
-		// Convert JSON encoded Transaction into an object (struct)
-		var transaction Transaction
-		json.Unmarshal(transactionsDatabaseFileScanner.Bytes(), &transaction)
-
-		// Rebuild the state (user balances),
-		// as a series of events
-		err = state.apply(transaction)
+		var blockFS BlockFS
+		err = json.Unmarshal(scanner.Bytes(), &blockFS)
 		if err != nil {
 			return nil, err
 		}
+
+		err = state.applyBlock(blockFS.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		state.latestBlockHash = blockFS.Key
 	}
 
 	return state, nil
+}
+
+func (s *State) LatestBlockHash() Hash {
+	return s.latestBlockHash
 }
 
 func (state *State) apply(transaction Transaction) error {
@@ -148,6 +142,17 @@ func (state *State) apply(transaction Transaction) error {
 
 	state.Balances[transaction.From] -= transaction.Value
 	state.Balances[transaction.To] += transaction.Value
+
+	return nil
+}
+
+func (state *State) applyBlock(block Block) error {
+	for _, transaction := range block.Transactions {
+		err := state.apply(transaction)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
